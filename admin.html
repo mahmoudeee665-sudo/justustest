@@ -543,13 +543,7 @@
             <button id="cancelEditBtn" class="btn secondary mini hidden"><i class="fa-solid fa-xmark"></i> Cancel</button>
           </div>
 
-          <div class="field">
-            <label>Type</label>
-            <select id="type">
-              <option value="image">Image</option>
-              <option value="video">Video</option>
-            </select>
-          </div>
+
 
           <div class="row2">
             <div class="field">
@@ -688,7 +682,6 @@
 
   const logoutBtn = document.getElementById("logoutBtn");
 
-  const typeEl = document.getElementById("type");
   const dateEl = document.getElementById("date_text");
   const titleEl = document.getElementById("title");
   const capEl = document.getElementById("caption");
@@ -738,9 +731,19 @@
     el.className = "msg" + (kind ? " " + kind : "");
   }
 
-  function safeName(name){
-    return (name || "file").replace(/\s+/g,"_").replace(/[^\w.\-]/g,"");
-  }
+function safeName(name){
+  return (name || "file").replace(/\s+/g,"_").replace(/[^\w.\-]/g,"");
+}
+
+function detectFileType(file){
+  if(!file) return null;
+
+  if(file.type.startsWith("image/")) return "image";
+  if(file.type.startsWith("video/")) return "video";
+
+  return null;
+}
+
 
   function toggleSaving(on){
     isSaving = on;
@@ -781,7 +784,6 @@
   }
 
   function resetFormFieldsOnly(){
-    typeEl.value = "image";
     dateEl.value = "";
     titleEl.value = "";
     capEl.value = "";
@@ -799,12 +801,11 @@
     formTitle.textContent = "Edit Memory";
     cancelEditBtn.classList.remove("hidden");
 
-    typeEl.value = item.type || "image";
     dateEl.value = item.date_text || "";
     titleEl.value = item.title || "";
     capEl.value = item.caption || "";
 
-    posterWrap.style.display = (typeEl.value === "video") ? "block" : "none";
+posterWrap.style.display = item.type === "video" ? "block" : "none";
     mediaEl.value = "";
     posterEl.value = "";
 
@@ -813,37 +814,37 @@
     setMsg(formMsg, "Edit mode: change text, or choose a new file to replace media.", "");
   }
 
-  function applyPreview(){
-    const type = typeEl.value;
-    pvDate.textContent = dateEl.value.trim() || "—";
-    pvTitle.textContent = titleEl.value.trim() || "Your title here";
-    pvCaption.textContent = capEl.value.trim() || "Your caption will appear here…";
+function applyPreview(){
 
-    const file = mediaEl.files && mediaEl.files[0];
+  pvDate.textContent = dateEl.value.trim() || "—";
+  pvTitle.textContent = titleEl.value.trim() || "Your title here";
+  pvCaption.textContent = capEl.value.trim() || "Your caption will appear here…";
 
-    if(type === "video"){
-      previewImg.style.display = "none";
-      previewVideo.style.display = "block";
+  const file = mediaEl.files && mediaEl.files[0];
 
-      if(file){
-        previewVideo.src = URL.createObjectURL(file);
-        previewVideo.load();
-      } else {
-        previewVideo.removeAttribute("src");
-        previewVideo.load();
-      }
-    } else {
-      previewVideo.style.display = "none";
-      previewImg.style.display = "block";
-
-      if(file){
-        previewImg.src = URL.createObjectURL(file);
-      } else {
-        previewImg.removeAttribute("src");
-      }
-      previewImg.style.display = previewImg.getAttribute("src") ? "block" : "none";
-    }
+  if(!file){
+    previewImg.style.display = "none";
+    previewVideo.style.display = "none";
+    posterWrap.style.display = "none";
+    return;
   }
+
+  const detectedType = detectFileType(file);
+
+  if(detectedType === "video"){
+    previewImg.style.display = "none";
+    previewVideo.style.display = "block";
+    previewVideo.src = URL.createObjectURL(file);
+    previewVideo.load();
+    posterWrap.style.display = "block";
+  } else {
+    previewVideo.style.display = "none";
+    previewImg.style.display = "block";
+    previewImg.src = URL.createObjectURL(file);
+    posterWrap.style.display = "none";
+  }
+}
+
 
   function applyPreviewFromExisting(item){
     pvDate.textContent = item.date_text || "—";
@@ -898,12 +899,28 @@
   // =============================
   // Form interactions
   // =============================
-  typeEl.addEventListener("change", () => {
-    posterWrap.style.display = (typeEl.value === "video") ? "block" : "none";
-    applyPreview();
-  });
+
   [dateEl, titleEl, capEl].forEach(el => el.addEventListener("input", applyPreview));
   mediaEl.addEventListener("change", applyPreview);
+  
+      const mediaFileName = document.getElementById("mediaFileName");
+const posterFileName = document.getElementById("posterFileName");
+
+mediaEl.addEventListener("change", () => {
+  if(mediaEl.files.length){
+    mediaFileName.textContent = mediaEl.files[0].name;
+  } else {
+    mediaFileName.textContent = "No file selected";
+  }
+});
+
+posterEl.addEventListener("change", () => {
+  if(posterEl.files.length){
+    posterFileName.textContent = posterEl.files[0].name;
+  } else {
+    posterFileName.textContent = "No file selected";
+  }
+});
 
   cancelEditBtn.addEventListener("click", () => {
     setModeCreate();
@@ -1014,11 +1031,23 @@
     if(isSaving) return;
     setMsg(formMsg, "", "");
 
-    const type = typeEl.value;
+
+
+
     const date_text = dateEl.value.trim();
     const title = titleEl.value.trim();
     const caption = capEl.value.trim();
     const mediaFile = mediaEl.files && mediaEl.files[0];
+    let type;
+
+if(mediaFile){
+  type = detectFileType(mediaFile);
+} else {
+  type = editingMediaPath && editingMediaPath.match(/\.(mp4|webm|mov)$/i)
+    ? "video"
+    : "image";
+}
+
     const posterFile = posterEl.files && posterEl.files[0];
 
     if(!date_text || !title || !caption){
@@ -1132,24 +1161,7 @@
       toggleSaving(false);
     }
 
-    const mediaFileName = document.getElementById("mediaFileName");
-const posterFileName = document.getElementById("posterFileName");
 
-mediaEl.addEventListener("change", () => {
-  if(mediaEl.files.length){
-    mediaFileName.textContent = mediaEl.files[0].name;
-  } else {
-    mediaFileName.textContent = "No file selected";
-  }
-});
-
-posterEl.addEventListener("change", () => {
-  if(posterEl.files.length){
-    posterFileName.textContent = posterEl.files[0].name;
-  } else {
-    posterFileName.textContent = "No file selected";
-  }
-});
 
   });
 </script>
